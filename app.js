@@ -3,50 +3,49 @@
 (() => {
   'use strict';
   const D = window.ANPAD_DATA;
-  const KEY = 'anpad26:v1';
-  const TKEY = 'anpad26:timer';
+  const KEY = 'anpad:v2';
+  const TKEY = 'anpad:v2:timer';
 
+  const MOD = D.modules;
+  const ITEMS = D.items;
   const AREA_NAME = { RLM: 'Raciocínio Lógico-Matemático', EN: 'Língua Inglesa', RA: 'Raciocínio Analítico', PT: 'Língua Portuguesa' };
-  const AREA_SHORT = { RLM: 'Lógico-matemático', EN: 'Inglês', RA: 'Analítico', PT: 'Português' };
-  const WEIGHTS = { RLM: 35, EN: 25, RA: 22, PT: 18 };
-  const TYPES = { L: 'Leitura do comando', E: 'Extrapolação', P: 'Pressa', C: 'Conteúdo ou método', V: 'Vocabulário', A: 'Aritmética', S: 'Chute' };
-  const THRESH = { RLM: 4, EN: 5, RA: 6, PT: 7 };
-  const HINTS = {
-    RLM: 'Lógico-matemático abaixo de 4: no dia 7, a manutenção também vira RLM (lógica ou financeira, o que estiver pior), e no dia 8 a revisão mista ganha +20 min, tirados do B3.',
-    EN: 'Inglês abaixo de 5: no dia 6, a manutenção passa a ser Inglês (abstract e vocabulário) com 40 min. Use o vocabulário do Caderno de Erros todo dia no B0.',
-    RA: 'Analítico abaixo de 6: no dia 7, a manutenção vira RA (comandos em negativo e estrutura análoga).',
-    PT: 'Português abaixo de 7: no dia 8, inclua 30 min de Português (revisão mista), tomando metade do B3.'
-  };
+  const AREA_SHORT = { RLM: 'RLM', EN: 'Inglês', RA: 'Analítico', PT: 'Português' };
+  const AREAS = ['RLM', 'EN', 'RA', 'PT'];
+  const TYPES = Object.fromEntries(D.tipos.map(t => [t[0], t[1]]));
+  const PHASE_NAME = { 1: 'Fase 1: essencial', 2: 'Fase 2: importante', 3: 'Fase 3: completar' };
+  const NIVEL_NAME = { 1: 'Nível 1', 2: 'Nível 2', 3: 'Nível 3' };
   const ICONS = {
-    hoje: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    plano: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    painel: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>',
+    modulos: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
     prompts: '<path d="M4 6l6 6-6 6M12 18h8"/>',
-    caderno: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    erros: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     guia: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6"/>'
   };
-  const NAV = [['hoje', 'Hoje'], ['plano', 'Plano'], ['prompts', 'Prompts'], ['caderno', 'Caderno'], ['guia', 'Guia']];
+  const NAV = [['painel', 'Painel'], ['modulos', 'Módulos'], ['prompts', 'Prompts'], ['erros', 'Erros'], ['guia', 'Guia']];
+  const SIM_TEXT = 'Gere os 4 prompts em modo SIMULADO, 10 questões cada, e não abra o gabarito. Resolva em condições reais (sem consulta, cronometrado) e corrija a fundo com o estudo reverso. Depois registre o placar.';
 
   /* ---------------------------------------------------------- utilidades */
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pad = n => String(n).padStart(2, '0');
-  const hm = m => pad(Math.floor(m / 60) % 24) + ':' + pad(m % 60);
-  const toMin = s => { const [a, b] = s.split(':').map(Number); return a * 60 + b; };
   const parseDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const todayISO = () => isoDate(new Date());
   const addDays = (iso, k) => { const d = parseDate(iso); d.setDate(d.getDate() + k); return isoDate(d); };
   const fmtDM = iso => { const [, m, d] = iso.split('-'); return `${d}/${m}`; };
-  const fmtLong = iso => new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(parseDate(iso));
   const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
   const clone = o => JSON.parse(JSON.stringify(o));
-  const chipA = a => `<span class="chip a-${a}">${a}</span>`;
+  const chipA = a => `<span class="chip a-${a}">${esc(a)}</span>`;
+  const fh = h => (Math.round(h * 10) / 10).toString().replace('.', ',') + ' h';
+  const fmin = m => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ' ' + pad(m % 60) : ''}` : `${m} min`;
 
   /* ---------------------------------------------------------- estado */
   const DEF = {
-    theme: 'auto', hours: 4, start: '08:00', exam: D.exam,
-    done: {}, dchk: {}, notes: {}, errors: [], scores: { s1: {}, s2: {} }, logi: {}, params: {}, open: {}, lastPrompt: 'RLM'
+    theme: 'auto', exam: '', days: null, hpd: 4, sess: 50,
+    mod: {}, time: {}, habit: [], errors: [], prova: {},
+    scores: [{ id: 's0', nome: 'Diagnóstico', v: {} }, { id: 's1', nome: 'Simulado 1', v: {} }, { id: 's2', nome: 'Simulado 2', v: {} }],
+    params: {}, open: {}, filt: { area: '', nivel: '', pend: false, hide: false }, lastPrompt: 'RLM'
   };
   let storageOK = true;
   function load() {
@@ -56,56 +55,68 @@
     } catch (e) { storageOK = false; return clone(DEF); }
   }
   let S = load();
-  let saveT;
+  let saveTm;
   function save() {
-    clearTimeout(saveT);
-    saveT = setTimeout(() => {
+    clearTimeout(saveTm);
+    saveTm = setTimeout(() => {
       try { localStorage.setItem(KEY, JSON.stringify(S)); }
-      catch (e) { if (storageOK) { storageOK = false; toast('Este navegador não deixou salvar os dados. Seu progresso vale só enquanto a aba estiver aberta.'); } }
+      catch (e) { if (storageOK) { storageOK = false; toast('Este navegador não deixou salvar os dados. O progresso vale só enquanto a aba estiver aberta.'); } }
     }, 120);
   }
-  const saveNow = () => { clearTimeout(saveT); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
+  const saveNow = () => { clearTimeout(saveTm); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
   window.addEventListener('beforeunload', saveNow);
 
-  /* ---------------------------------------------------------- plano: cálculos */
-  const days = D.days;
-  const blocksOf = d => d.blocks[String(S.hours)];
-  const startOf = d => (d.kind === 'normal' || d.kind === 'rev') ? S.start : d.start;
-  function timeline(d) {
-    let t = toMin(startOf(d));
-    return blocksOf(d).map(b => { const s = t; t += b.min; return Object.assign({}, b, { s, e: t }); });
-  }
-  const bkey = (d, i) => `${S.hours}:${d.n}:${i}`;
-  function dayStats(d) {
-    let tot = 0, done = 0, n = 0, nd = 0;
-    blocksOf(d).forEach((b, i) => {
-      if (b.type === 'break') return;
-      tot += b.min; n++;
-      if (S.done[bkey(d, i)]) { done += b.min; nd++; }
+  /* ---------------------------------------------------------- cálculos do plano */
+  const itemH = it => it.kind === 'mod' ? MOD[it.id].h : it.h;
+  const itemName = it => it.kind === 'mod' ? MOD[it.id].nome : it.name;
+  const itemArea = it => it.kind === 'mod' ? MOD[it.id].area : 'SIM';
+  const status = it => S.mod[it.id];
+  function stats() {
+    let tot = 0, done = 0, mods = 0, modsDone = 0, rem = 0;
+    ITEMS.forEach(it => {
+      const s = status(it);
+      if (s === 'skip') return;
+      const h = itemH(it); tot += h;
+      if (it.kind === 'mod') mods++;
+      if (s === 'done') { done += h; if (it.kind === 'mod') modsDone++; } else rem += h;
     });
-    return { tot, done, n, nd, pct: tot ? Math.round(done / tot * 100) : 0 };
+    const studied = Object.values(S.time).reduce((a, b) => a + b, 0);
+    return { tot, done, mods, modsDone, rem, studied, pct: tot ? Math.round(done / tot * 100) : 0 };
   }
-  function overall() {
-    let tot = 0, done = 0;
-    days.forEach(d => { const s = dayStats(d); tot += s.tot; done += s.done; });
-    return { tot, done, pct: tot ? Math.round(done / tot * 100) : 0 };
+  const nextItem = () => ITEMS.find(it => !status(it));
+  function errCount(id) { return S.errors.filter(e => e.modulo === id).length; }
+  function examDays() {
+    if (!S.exam) return null;
+    const ms = new Date(S.exam) - new Date();
+    if (isNaN(ms) || ms <= 0) return null;
+    return Math.max(1, Math.ceil(ms / 864e5));
   }
-  function currentDay() {
-    const t = todayISO();
-    const f = days.find(d => d.date === t);
-    if (f) return { n: f.n, today: true };
-    if (t < days[0].date) return { n: 1, today: false, rel: 'antes' };
-    return { n: days.length, today: false, rel: 'depois' };
+  const effDays = () => (S.days != null && S.days !== '') ? +S.days : (examDays() ?? 10);
+  function coverage() {
+    const days = effDays(), hpd = +S.hpd || 0;
+    const total = days * hpd;
+    const allowed = total < 30 ? 0 : (total < 55 ? 1 : 2);
+    const pendSims = ITEMS.filter(it => it.kind === 'sim' && !status(it)).length;
+    const sims = Math.min(allowed, pendSims);
+    const habLeft = Math.max(0, D.habito.totalH - S.habit.length * D.habito.min / 60);
+    const hab = total >= 30 ? habLeft : 0;
+    const avail = Math.max(0, total - sims * D.simH - hab);
+    let acc = 0, covered = 0, last = -1, broke = false;
+    ITEMS.forEach((it, i) => {
+      if (broke || status(it)) return;
+      if (it.kind === 'sim') { if (covered > 0) last = i; return; }
+      acc += itemH(it);
+      if (acc <= avail + 1e-9) { covered++; last = i; } else broke = true;
+    });
+    const pend = ITEMS.filter(it => it.kind === 'mod' && !status(it)).length;
+    return { days, hpd, total, sims, hab, avail, covered, pend, last };
   }
-  const dayTitle = d => d.title.replace(' · ', ': ').replace(/^SIMULADO/, 'Simulado');
-  const blockArea = (d, b) => b.areas[0] || (d.kind === 'sim' && b.type !== 'break' ? 'SIM' : 'NEU');
 
   /* ---------------------------------------------------------- toast e cópia */
   let toastT;
   function toast(msg) {
-    const t = $('#toast');
-    t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2800);
   }
   async function copyText(text, okMsg) {
     try { await navigator.clipboard.writeText(text); }
@@ -146,18 +157,23 @@
     if (T.state === 'running') return Math.max(0, Math.round((T.endAt - Date.now()) / 1000));
     return T.left;
   }
-  function startTimer(dn, i) {
-    const d = days[dn - 1];
-    const b = timeline(d)[i];
-    if (!b) return;
+  function credit(minutes) {
+    if (!T || T.isBreak || !T.id || minutes < 1) return;
+    S.time[T.id] = (S.time[T.id] || 0) + minutes; save();
+    toast(`+${minutes} min registrados em ${T.id}.`);
+  }
+  function startSession(id, minutes) {
+    const it = ITEMS.find(x => x.id === id);
+    if (!it) return;
     unlockAudio();
-    const label = b.areas.length ? `${b.label} (${b.areas.join(' + ')})` : b.label;
-    T = {
-      doneKey: bkey(d, i), d: dn, i, name: `Dia ${dn}: ${b.code ? b.code + ' ' : ''}${label}`,
-      area: blockArea(d, b), total: b.min * 60, endAt: Date.now() + b.min * 60000, left: b.min * 60,
-      state: 'running', isBreak: b.type === 'break'
-    };
+    const mins = minutes || +S.sess || 50;
+    T = { id, name: itemName(it), area: itemArea(it), total: mins * 60, endAt: Date.now() + mins * 60000, left: mins * 60, state: 'running', isBreak: false };
     saveT_(); renderDock(); rerender();
+  }
+  function startBreak(mins) {
+    unlockAudio();
+    T = { id: null, name: 'Pausa', area: 'NEU', total: mins * 60, endAt: Date.now() + mins * 60000, left: mins * 60, state: 'running', isBreak: true };
+    saveT_(); renderDock();
   }
   function timerToggle() {
     if (!T || T.state === 'finished') return;
@@ -170,24 +186,22 @@
     T.left = T.total; T.endAt = Date.now() + T.total * 1000; T.state = 'running'; unlockAudio();
     saveT_(); renderDock();
   }
-  function timerClose() { T = null; saveT_(); renderDock(); document.title = baseTitle; rerender(); }
-  function timerFinishMark() {
-    if (T && !T.isBreak) { S.done[T.doneKey] = true; save(); }
-    timerClose();
+  function timerClose() {
+    if (T && T.state !== 'finished') credit(Math.floor((T.total - timerLeft()) / 60));
+    T = null; saveT_(); renderDock(); document.title = baseTitle; rerender();
   }
   function renderDock() {
     const el = $('#dock');
     if (!T) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
-    el.classList.remove('finished');
     el.className = 'dock a-' + (T.area || 'NEU');
     const fin = T.state === 'finished';
     el.innerHTML = `
-      <div class="dk-name">${esc(T.name)}</div>
+      <div class="dk-name">${esc(T.id ? T.id + ': ' : '')}${esc(T.name)}</div>
       <div class="dk-time" id="dk-time">${fmtClock(timerLeft())}</div>
       <div class="dk-ctl">
         ${fin
-          ? `${T.isBreak ? '' : '<button type="button" class="btn light" data-act="timer-done">Marcar como feito</button>'}<button type="button" class="btn" data-act="timer-close">Fechar</button>`
+          ? `<button type="button" class="btn light" data-act="timer-break">Pausa de 10 min</button><button type="button" class="btn" data-act="timer-close">Fechar</button>`
           : `<button type="button" class="btn light" data-act="timer-toggle">${T.state === 'running' ? 'Pausar' : 'Retomar'}</button>
              <button type="button" class="btn" data-act="timer-reset">Zerar</button>
              <button type="button" class="btn" data-act="timer-close">Encerrar</button>`}
@@ -196,251 +210,249 @@
   }
   const baseTitle = document.title;
   function tick() {
-    if (!T) return;
-    if (T.state === 'running') {
-      const left = timerLeft();
-      const tm = $('#dk-time'), bar = $('#dk-bar');
-      if (tm) tm.textContent = fmtClock(left);
-      if (bar) bar.style.width = (100 - left / T.total * 100) + '%';
-      document.title = `${fmtClock(left)} · ${T.name}`;
-      if (left <= 0) {
-        T.state = 'finished'; T.left = 0; T.endAt = null; saveT_();
-        beep(); renderDock(); $('#dock').classList.add('finished');
-        document.title = 'Tempo! · ' + baseTitle;
-        toast('Tempo do bloco acabou.');
-        rerender();
-      }
+    if (!T || T.state !== 'running') return;
+    const left = timerLeft();
+    const tm = $('#dk-time'), bar = $('#dk-bar');
+    if (tm) tm.textContent = fmtClock(left);
+    if (bar) bar.style.width = (100 - left / T.total * 100) + '%';
+    document.title = `${fmtClock(left)} · ${T.name}`;
+    if (left <= 0) {
+      credit(Math.round(T.total / 60));
+      T.state = 'finished'; T.left = 0; T.endAt = null; saveT_();
+      beep(); renderDock(); $('#dock').classList.add('finished');
+      document.title = 'Tempo! · ' + baseTitle;
+      toast(T.isBreak ? 'Pausa terminou. Hora de voltar.' : 'Sessão concluída. Faça uma pausa.');
+      rerender();
     }
   }
   if (T && T.state === 'running' && timerLeft() <= 0) { T.state = 'finished'; T.left = 0; T.endAt = null; saveT_(); }
   setInterval(tick, 500);
 
   /* ---------------------------------------------------------- componentes */
-  function rulerHTML(d, tl, opts = {}) {
-    const start = tl[0].s, end = tl[tl.length - 1].e, total = end - start;
-    const segs = tl.map((b, i) => {
-      const a = blockArea(d, b);
-      const done = !!S.done[bkey(d, i)];
-      const active = T && T.doneKey === bkey(d, i) && T.state !== 'finished';
-      const wide = b.min / total >= 0.12;
-      let label = '';
-      if (b.type !== 'break' && wide) {
-        label = b.areas.length ? b.areas.join('+') : esc(b.label.split(' ')[0]);
-      }
-      const tip = `${hm(b.s)} às ${hm(b.e)}: ${b.label}${b.areas.length ? ' (' + b.areas.join(' + ') + ')' : ''}`;
-      return `<button type="button" class="rs a-${a}${b.type === 'break' ? ' break' : ''}${done ? ' done' : ''}${active ? ' active' : ''}"
-        style="--m:${b.min};--k:${i}" ${opts.mini ? 'tabindex="-1" aria-hidden="true"' : `data-act="goto" data-i="${i}"`}
-        title="${esc(tip)}" aria-label="${esc(tip)}${done ? ', feito' : ''}">${label}</button>`;
+  function rulerHTML(opts = {}) {
+    const next = nextItem();
+    const segs = ITEMS.map((it, i) => {
+      const a = itemArea(it);
+      const s = status(it);
+      const prev = ITEMS[i - 1];
+      const ph = prev && prev.phase !== it.phase;
+      const h = itemH(it);
+      const label = it.kind === 'sim' ? 'S' + it.id.slice(3) : (h >= 2.5 ? it.id : '');
+      const tip = `${itemName(it)} (${fh(h)})${s === 'done' ? ', feito' : s === 'skip' ? ', já domino' : ''}`;
+      return `<button type="button" class="rs a-${a}${it.kind === 'sim' ? ' sim' : ''}${ph ? ' ph' : ''}${s === 'done' ? ' done' : ''}${s === 'skip' ? ' skipped' : ''}${next && next.id === it.id ? ' cur' : ''}"
+        style="--m:${h};--k:${i}" data-i="${i}" ${opts.mini ? 'tabindex="-1" aria-hidden="true"' : `data-act="goto-mod" data-id="${it.id}"`}
+        title="${esc(tip)}" aria-label="${esc(tip)}">${esc(label)}</button>`;
     }).join('');
-    let ticks = '';
-    if (!opts.mini) {
-      let hs = '';
-      for (let h = Math.ceil(start / 60); h * 60 < end; h++) {
-        const p = (h * 60 - start) / total * 100;
-        if (p > 7 && p < 93) hs += `<span style="left:${p.toFixed(2)}%">${pad(h % 24)}:00</span>`;
-      }
-      ticks = `<div class="ticks" aria-hidden="true"><span style="left:0">${hm(start)}</span>${hs}<span style="left:100%">${hm(end)}</span></div>`;
-    }
-    const now = opts.now ? '<div class="now" id="now" hidden></div>' : '';
-    return `<div class="ruler${opts.mini ? ' mini ruler-static' : ''}${opts.enter ? ' enter' : ''}" ${opts.mini ? '' : 'id="ruler"'} data-start="${start}" data-end="${end}">${segs}${now}</div>${ticks}`;
+    const cov = opts.cov ? '<div class="cov" id="cov"><b id="cov-lbl"></b></div>' : '';
+    const phases = opts.mini ? '' : `<div class="phases" id="phases" aria-hidden="true">${[1, 2, 3].map(p => `<span data-p="${p}">${esc(PHASE_NAME[p])}</span>`).join('')}</div>`;
+    return `<div class="ruler${opts.mini ? ' mini' : ''}${opts.enter ? ' enter' : ''}" ${opts.mini ? '' : 'id="ruler"'}>${segs}${cov}</div>${phases}`;
   }
-  function updateNow() {
-    const el = $('#now'); if (!el) return;
+  function placeRulerExtras() {
     const r = $('#ruler'); if (!r) return;
-    const s = +r.dataset.start, e = +r.dataset.end;
-    const n = new Date(); const m = n.getHours() * 60 + n.getMinutes() + n.getSeconds() / 60;
-    if (m < s || m > e) { el.hidden = true; return; }
-    el.hidden = false; el.style.left = ((m - s) / (e - s) * 100) + '%';
+    const segs = $$('.rs', r);
+    const ph = $('#phases');
+    if (ph) {
+      $$('span', ph).forEach(sp => {
+        const idx = ITEMS.findIndex(it => it.phase === +sp.dataset.p);
+        const seg = segs[idx];
+        if (seg) sp.style.left = Math.max(0, Math.min(seg.offsetLeft, r.offsetWidth - sp.offsetWidth)) + 'px';
+      });
+    }
+    const cov = $('#cov'); if (!cov) return;
+    const c = coverage();
+    const lbl = $('#cov-lbl');
+    if (c.last < 0) { cov.style.left = '0px'; cov.classList.remove('end'); }
+    else {
+      const seg = segs[c.last];
+      const x = seg.offsetLeft + seg.offsetWidth;
+      cov.style.left = x + 'px';
+      cov.classList.toggle('end', x > r.offsetWidth * 0.55);
+    }
+    lbl.textContent = c.covered >= c.pend && c.pend > 0 ? 'seu tempo cobre tudo' : (c.pend === 0 ? 'plano concluído' : `seu tempo: ${c.covered} de ${c.pend}`);
   }
-  function legendHTML(areas) {
-    const names = areas.map(a => `<span class="a-${a}"><i></i>${esc(AREA_NAME[a])}</span>`);
-    return `<div class="legend">${names.join('')}<span class="a-NEU"><i></i>Sem área (aquecimento, fechamento, correção)</span></div>`;
+  function legendHTML() {
+    return `<div class="legend">${AREAS.map(a => `<span class="a-${a}"><i></i>${esc(AREA_NAME[a])}</span>`).join('')}<span class="a-SIM"><i></i>Simulado</span><span class="a-NEU"><i></i>Já domino (fora das horas)</span></div>`;
   }
-  function accordion(items, openFirst) {
-    return items.map((it, i) => `<details class="acc"${openFirst && i === 0 ? ' open' : ''}><summary>${esc(it.title)}</summary><div class="acc-body prose">${it.html}</div></details>`).join('');
-  }
-  function hoursToggle() {
-    return `<div class="tabs" role="group" aria-label="Carga diária"><button type="button" data-act="hours" data-v="4">4h por dia</button><button type="button" data-act="hours" data-v="6">6h por dia</button></div>`;
+  function accordion(items) {
+    return items.map(it => `<details class="acc"><summary>${esc(it.title)}</summary><div class="acc-body prose">${it.html}</div></details>`).join('');
   }
 
-  /* ---------------------------------------------------------- view: dia / hoje */
+  /* detalhes de módulo (edital, pesquisar, saber fazer) */
+  function modDetails(m, withTitle) {
+    const terms = m.terms.map(t => `<a class="term" href="https://www.google.com/search?q=${encodeURIComponent(t)}" target="_blank" rel="noopener">${esc(t)}</a>`).join('');
+    const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(m.nome + ' aula')}`;
+    return `<dl class="${withTitle ? 'kv' : ''}">
+      <dt>Edital</dt><dd>${esc(m.edital)}</dd>
+      <dt>Pesquisar</dt><dd><span class="terms a-${m.area}">${terms}</span>
+        ${m.pnote ? `<p class="small muted" style="margin-top:.4rem">${esc(m.pnote)}</p>` : ''}
+        <p class="small" style="margin-top:.4rem"><a href="${yt}" target="_blank" rel="noopener">Buscar vídeo-aulas deste módulo</a></p></dd>
+      <dt>Saber fazer</dt><dd>${esc(m.saber)}</dd>
+    </dl>`;
+  }
+
+  /* ---------------------------------------------------------- view: painel */
   let enterOnce = true;
-  function viewDay(n, isHojeRoute) {
-    const d = days[n - 1];
-    const cur = currentDay();
-    const isToday = cur.today && cur.n === n;
-    const tl = timeline(d);
-    const st = dayStats(d);
-    const bl = blocksOf(d);
-    const firstUndone = bl.findIndex((b, i) => b.type !== 'break' && !S.done[bkey(d, i)]);
-    const areasSeen = [...new Set(tl.flatMap(b => b.areas))];
-
-    let notice = '';
-    if (isHojeRoute && !cur.today) {
-      notice = `<p class="notice">O plano vai de ${fmtDM(days[0].date)} a ${fmtDM(days[days.length - 1].date)}. Hoje é ${fmtDM(todayISO())}, ${cur.rel === 'antes' ? 'antes do início' : 'depois do fim'}, então mostro o dia ${n}. Use as setas para navegar pelos dias.</p>`;
-    } else if (!isHojeRoute && cur.today && !isToday) {
-      notice = `<p class="notice">Você está vendo outro dia do plano. <a href="#/hoje">Voltar para hoje (dia ${cur.n})</a>.</p>`;
+  function nextCardHTML() {
+    const it = nextItem();
+    if (!it) return `<section class="panel next-card"><h2>Plano concluído</h2><p class="muted" style="margin-top:.5rem">Todos os itens estão marcados. Use o que sobrar para refazer os erros reincidentes e fazer um último simulado.</p><div class="next-actions"><a class="btn primary" href="#/erros">Ver registro de erros</a></div></section>`;
+    if (it.kind === 'sim') {
+      return `<section class="panel next-card a-SIM">
+        <div class="meta"><span class="chip solid a-SIM">Checkpoint</span><span class="chip a-NEU">${fh(it.h)}</span></div>
+        <h2>${esc(it.name)}</h2>
+        <p class="muted">${esc(SIM_TEXT)}</p>
+        <div class="next-actions">
+          <a class="btn primary" href="#/prompts">Abrir prompts</a>
+          <a class="btn" href="#/erros/placar">Registrar placar</a>
+          <button type="button" class="btn" data-act="mod-done" data-id="${it.id}">Marcar como feito</button>
+          <button type="button" class="btn ghost" data-act="mod-skip" data-id="${it.id}">Pular este checkpoint</button>
+        </div></section>`;
     }
-
-    let pauta = '';
-    if (d.kind === 'normal') {
-      const f = d.focus;
-      pauta = `<dl class="pauta">
-        <div><dt>Foco 1</dt><dd>${chipA(f.f1)} ${esc(f.f1t)}</dd></div>
-        <div><dt>Foco 2</dt><dd>${chipA(f.f2)} ${esc(f.f2t)}</dd></div>
-        <div><dt>Manutenção</dt><dd>${chipA(f.m1)} ${esc(f.m1t)}${S.hours === 6 ? `<br>${chipA(f.m2)} ${esc(f.m2t)}` : ''}</dd></div>
-      </dl>`;
-    } else if (d.kind === 'sim') {
-      pauta = `<dl class="pauta"><div><dt>Ordem das provas</dt><dd>${esc(d.ordem)}</dd></div></dl>`;
-    }
-
-    const items = d.deliver.map((h, j) => ({ h, j }));
-    if (d.extra) items.push({ h: d.extra, j: items.length });
-    const delHTML = items.map(({ h, j }) => {
-      const on = !!S.dchk[`${d.n}:${j}`];
-      return `<li class="${on ? 'done' : ''}"><label class="chk a-PT"><input type="checkbox" data-act="dchk" data-d="${d.n}" data-j="${j}" ${on ? 'checked' : ''}><span></span></label><span>${h}</span></li>`;
-    }).join('');
-
-    const list = tl.map((b, i) => blockHTML(d, b, i, i === firstUndone && isToday)).join('');
-    const prevN = n > 1 ? n - 1 : null, nextN = n < days.length ? n + 1 : null;
-    const sel = days.map(x => `<option value="${x.n}"${x.n === n ? ' selected' : ''}>Dia ${x.n}: ${x.wd} ${fmtDM(x.date)}</option>`).join('');
-
+    const m = MOD[it.id];
+    const studied = S.time[m.id] || 0;
+    return `<section class="panel next-card a-${m.area}">
+      <div class="meta">${chipA(m.area)}<span class="chip a-NEU">${NIVEL_NAME[m.nivel]}</span><span class="chip a-NEU">${fh(m.h)}</span>${studied ? `<span class="chip a-NEU">${fmin(studied)} estudados</span>` : ''}</div>
+      <h2>${esc(m.id)} · ${esc(m.nome)}</h2>
+      <p class="small muted">Próximo da lista. Leia a meta, pesquise os termos e estude até conseguir fazer o que está em "saber fazer".</p>
+      ${modDetails(m, true)}
+      <div class="next-actions">
+        <button type="button" class="btn area a-${m.area}" data-act="session" data-id="${m.id}">Iniciar sessão de ${S.sess} min</button>
+        <button type="button" class="btn" data-act="open-prompt" data-id="${m.id}">Abrir prompt</button>
+        <button type="button" class="btn" data-act="mod-done" data-id="${m.id}">Marcar como feito</button>
+        <button type="button" class="btn ghost" data-act="mod-skip" data-id="${m.id}">Já domino</button>
+      </div></section>`;
+  }
+  function viewPainel() {
+    const st = stats(), c = coverage();
+    const nxt = ITEMS.filter(it => !status(it)).slice(1, 5);
+    const habitTarget = Math.ceil(D.habito.totalH * 60 / D.habito.min);
+    const hToday = S.habit.includes(todayISO());
+    const dots = Array.from({ length: habitTarget }, (_, i) => `<i class="${i < S.habit.length ? 'on' : ''}"></i>`).join('');
     const html = `
-    <section class="day" data-day="${n}">
-      <div class="day-top">
-        <div class="row">
-          <span class="day-date">${d.wdl}, ${fmtLong(d.date)}</span>
-          <span class="pill">${isToday ? 'Hoje, ' : ''}dia ${n} de ${days.length}</span>
-          <span class="pill">${S.hours}h por dia</span>
-        </div>
-        <div class="day-nav">
-          <a class="icon-btn" ${prevN ? `href="#/dia/${prevN}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} aria-label="Dia anterior"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M15 6l-6 6 6 6"/></svg></a>
-          <select data-act="day-select" aria-label="Escolher dia">${sel}</select>
-          <a class="icon-btn" ${nextN ? `href="#/dia/${nextN}"` : 'aria-disabled="true" style="opacity:.35;pointer-events:none"'} aria-label="Próximo dia"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M9 6l6 6-6 6"/></svg></a>
-        </div>
+    <header class="page-head">
+      <h1>Seu plano, módulo a módulo</h1>
+      <p>A régua mostra todo o conteúdo programático. Cada trecho é um módulo, com largura proporcional às horas. Siga a ordem, marque o que concluir e deixe o app calcular o que cabe no seu tempo.</p>
+    </header>
+    <div class="ruler-wrap" aria-label="Régua do plano">
+      ${rulerHTML({ cov: true, enter: enterOnce })}
+      ${legendHTML()}
+    </div>
+    <div class="stats">
+      <div class="stat-box"><b>${st.pct}%</b><span>do plano concluído (em horas)</span></div>
+      <div class="stat-box"><b>${st.modsDone}<small style="font-size:1rem;color:var(--ink-3)"> / ${st.mods}</small></b><span>módulos feitos</span></div>
+      <div class="stat-box"><b>${fh(st.rem).replace(' h', '')}<small style="font-size:1rem;color:var(--ink-3)"> h</small></b><span>de estudo restantes (estimativa)</span></div>
+      <div class="stat-box"><b>${fmin(Math.round(st.studied))}</b><span>de tempo registrado nas sessões</span></div>
+    </div>
+    <div class="dash-grid">
+      ${nextCardHTML()}
+      <div class="side-stack">
+        <section class="panel">
+          <h2>Quanto cabe no seu tempo</h2>
+          <div class="calc-grid">
+            <label class="field"><span>Dias até a prova</span><input type="number" min="1" max="365" inputmode="numeric" data-calc="days" value="${S.days ?? ''}" placeholder="${effDays()}"></label>
+            <label class="field"><span>Horas por dia</span><input type="number" min="0.5" max="14" step="0.5" inputmode="decimal" data-calc="hpd" value="${S.hpd}"></label>
+          </div>
+          <div class="calc-out" id="calc-out"></div>
+          <p class="small muted" style="margin-top:.6rem">Marque "já domino" nos módulos que você acerta sem estudar: as horas deles saem da conta.</p>
+        </section>
+        <section class="panel">
+          <h2>Leitura diária em inglês</h2>
+          <p class="small muted">${D.habito.min} min por dia de textos de economia e negócios. Meta: ${habitTarget} dias (cerca de ${D.habito.totalH} h).</p>
+          <div class="habit-row" style="margin-top:.7rem">
+            <button type="button" class="btn ${hToday ? '' : 'primary'}" data-act="habit">${hToday ? 'Leitura de hoje registrada' : 'Li hoje'}</button>
+            <span class="small"><strong>${S.habit.length}</strong> de ${habitTarget} dias</span>
+          </div>
+          <div class="habit-dots" aria-hidden="true">${dots}</div>
+        </section>
+        ${nxt.length ? `<section class="panel"><h2>A seguir</h2><ul class="upnext">${nxt.map(it => `<li>${it.kind === 'mod' ? chipA(MOD[it.id].area) : '<span class="chip a-SIM">Simulado</span>'}<a href="#/modulos/${it.id}">${esc(itemName(it))}</a><span class="muted small">${fh(itemH(it))}</span></li>`).join('')}</ul></section>` : ''}
       </div>
-      ${notice}
-      <header class="day-head">
-        <h1>${esc(dayTitle(d))}</h1>
-        <p class="day-goal"><b>Meta do dia:</b> ${esc(d.goal)}</p>
-        ${pauta}
-      </header>
-
-      <div class="ruler-wrap" aria-label="Régua do dia">
-        ${rulerHTML(d, tl, { now: isToday, enter: enterOnce })}
-        ${legendHTML(areasSeen)}
-      </div>
-
-      <div class="day-grid">
-        <div>
-          <div class="list-head"><h2>Blocos do dia</h2><span class="small muted">${hm(tl[0].s)} às ${hm(tl[tl.length - 1].e)}</span></div>
-          <ol class="blocks">${list}</ol>
-        </div>
-        <aside class="side">
-          <section class="panel">
-            <h2>Progresso do dia</h2>
-            <p class="big">${st.pct}%</p>
-            <div class="bar" role="progressbar" aria-valuenow="${st.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${st.pct}%"></i></div>
-            <p class="small muted">${st.nd} de ${st.n} blocos. ${st.done} de ${st.tot} min de estudo.</p>
-            <div class="row" style="margin-top:.8rem">
-              <button type="button" class="btn sm" data-act="day-all" data-d="${n}">Marcar tudo como feito</button>
-              <button type="button" class="btn sm ghost" data-act="day-none" data-d="${n}">Limpar</button>
-            </div>
-          </section>
-          <section class="panel">
-            <h2>Entregáveis</h2>
-            <ul class="checks">${delHTML}</ul>
-          </section>
-          <section class="panel">
-            <h2>Anotações do dia</h2>
-            <textarea data-note="${n}" placeholder="O que travou? Qual regra você leva para amanhã?" aria-label="Anotações do dia">${esc(S.notes[n] || '')}</textarea>
-          </section>
-        </aside>
-      </div>
-    </section>`;
+    </div>`;
     enterOnce = false;
     return html;
   }
+  function updateCalc() {
+    const out = $('#calc-out'); if (!out) return;
+    const c = coverage();
+    const simTxt = c.sims ? `, com tempo para ${c.sims} simulado${c.sims > 1 ? 's' : ''}` : ', sem tempo reservado para simulado';
+    let txt;
+    if (c.pend === 0) txt = 'Todos os módulos estão marcados.';
+    else if (c.covered >= c.pend) txt = `Cabe <strong>tudo</strong> (${c.pend} módulos)${simTxt}.`;
+    else txt = `Cabem <strong>${c.covered} dos ${c.pend}</strong> módulos pendentes${simTxt}. Corte pelo fim da lista.`;
+    out.innerHTML = `<strong>${fh(c.total).replace(' h', '')} h</strong> no total (${c.days} dias × ${String(c.hpd).replace('.', ',')} h). ${txt}`;
+    placeRulerExtras();
+  }
 
-  function blockHTML(d, b, i, autoOpen) {
-    const k = bkey(d, i);
-    const done = !!S.done[k];
-    const active = T && T.doneKey === k && T.state !== 'finished';
-    const area = blockArea(d, b);
-    if (b.type === 'break') {
-      return `<li class="blk break a-NEU${active ? ' active' : ''}" id="blk-${i}">
-        <div class="blk-time"><span class="t">${hm(b.s)}</span></div>
-        <div class="blk-main">
-          <div><strong>${esc(b.label)}, ${b.min} min</strong><p>${b.html}</p></div>
-          <button type="button" class="btn sm" data-act="timer" data-d="${d.n}" data-i="${i}">${active ? 'Em andamento' : 'Iniciar'}</button>
-        </div>
-      </li>`;
+  /* ---------------------------------------------------------- view: módulos */
+  function modRowHTML(it, pos, curId) {
+    const s = status(it);
+    if (it.kind === 'sim') {
+      return `<li class="mrow simrow a-SIM${s === 'done' ? ' done' : ''}${s === 'skip' ? ' skipped' : ''}" id="m-${it.id}">
+        <div class="mrow-main">
+          <label class="chk"><input type="checkbox" data-act="mod-toggle" data-id="${it.id}" ${s === 'done' ? 'checked' : ''} aria-label="Marcar ${esc(it.name)} como feito"><span></span></label>
+          <div class="mrow-title"><div class="line1"><h3>${esc(it.name)}</h3><span class="chip solid a-SIM">Checkpoint</span><span class="chip a-NEU">${fh(it.h)}</span></div>
+            <p class="small muted" style="margin-top:.3rem;max-width:68ch">${esc(SIM_TEXT)}</p></div>
+          <div class="mrow-actions"><a class="btn sm" href="#/prompts">Prompts</a><a class="btn sm" href="#/erros/placar">Placar</a></div>
+        </div></li>`;
     }
-    const open = S.open[`${d.n}:${i}`] ?? autoOpen;
-    const promptBtn = b.prompt
-      ? `<button type="button" class="btn sm area a-${b.prompt.area}" data-act="open-prompt" data-area="${b.prompt.area}" data-n="${b.prompt.n}" data-foco="${esc(b.prompt.foco)}">Abrir prompt</button>`
-      : '';
-    return `<li class="blk a-${area}${done ? ' done' : ''}${active ? ' active' : ''}" id="blk-${i}">
-      <div class="blk-time"><span class="t">${hm(b.s)}</span><span class="d">${b.min} min</span></div>
-      <div class="blk-main">
-        <div class="blk-head">
-          <label class="chk"><input type="checkbox" data-act="toggle" data-d="${d.n}" data-i="${i}" ${done ? 'checked' : ''} aria-label="Marcar ${esc(b.label)} como feito"><span></span></label>
-          <div class="blk-title">${b.code ? `<span class="code">${b.code}</span>` : ''}<h3>${esc(b.label)}</h3>${b.areas.map(chipA).join('')}</div>
-          <div class="blk-actions">${promptBtn}<button type="button" class="btn sm" data-act="timer" data-d="${d.n}" data-i="${i}">${active ? 'Em andamento' : 'Iniciar timer'}</button></div>
+    const m = MOD[it.id];
+    const studied = S.time[m.id] || 0, ec = errCount(m.id);
+    const open = S.open[m.id] ?? false;
+    return `<li class="mrow a-${m.area}${s === 'done' ? ' done' : ''}${s === 'skip' ? ' skipped' : ''}${curId === it.id ? ' cur' : ''}" id="m-${m.id}">
+      <div class="mrow-main">
+        <label class="chk"><input type="checkbox" data-act="mod-toggle" data-id="${m.id}" ${s === 'done' ? 'checked' : ''} ${s === 'skip' ? 'disabled' : ''} aria-label="Marcar ${esc(m.nome)} como feito"><span></span></label>
+        <div class="mrow-title">
+          <div class="line1"><span class="mnum">#${it.n}</span><h3>${esc(m.nome)}</h3>${chipA(m.area)}<span class="chip a-NEU">${NIVEL_NAME[m.nivel]}</span><span class="chip a-NEU">${fh(m.h)}</span></div>
+          <div class="mrow-meta"><span>${esc(m.id)}</span>${studied ? `<span>${fmin(studied)} de ${fh(m.h)} estudados</span>` : ''}${ec ? `<a class="badge-err" href="#/erros">${ec} ${ec > 1 ? 'erros' : 'erro'} no registro</a>` : ''}${s === 'skip' ? '<span>já domino</span>' : ''}</div>
         </div>
-        ${b.theme ? `<p class="blk-theme">${esc(b.theme)}</p>` : ''}
-        <details class="more" data-k="${d.n}:${i}"${open ? ' open' : ''}><summary>Como fazer</summary><div class="more-body">${b.html}</div></details>
+        <div class="mrow-actions">
+          ${s === 'skip' ? `<button type="button" class="btn sm" data-act="mod-skip" data-id="${m.id}">Voltar a estudar</button>` :
+            `<button type="button" class="btn sm" data-act="session" data-id="${m.id}">Sessão ${S.sess} min</button>
+             <button type="button" class="btn sm" data-act="open-prompt" data-id="${m.id}">Prompt</button>
+             <button type="button" class="btn sm ghost" data-act="mod-skip" data-id="${m.id}">Já domino</button>`}
+        </div>
       </div>
+      <details class="more" data-k="${m.id}"${open ? ' open' : ''}><summary>Edital, o que pesquisar e a meta</summary><div class="more-body">${modDetails(m, false)}</div></details>
     </li>`;
   }
-
-  /* ---------------------------------------------------------- view: plano */
-  function effortHTML() {
-    const mins = { RLM: 0, EN: 0, RA: 0, PT: 0 };
-    days.forEach(d => blocksOf(d).forEach(b => {
-      if (b.type === 'break' || !b.areas.length) return;
-      b.areas.forEach(a => { mins[a] += b.min / b.areas.length; });
-    }));
-    const tot = Object.values(mins).reduce((a, b) => a + b, 0) || 1;
-    const rows = ['RLM', 'EN', 'RA', 'PT'].map(a => {
-      const p = mins[a] / tot * 100;
-      return `<div class="eff-row a-${a}"><span>${esc(AREA_SHORT[a])}</span><div class="eff-track" title="Planejado: ${p.toFixed(0)}%. Meta de peso: ${WEIGHTS[a]}%"><i style="width:${p.toFixed(1)}%"></i><b style="left:${WEIGHTS[a]}%"></b></div><span>${p.toFixed(0)}%</span></div>`;
-    }).join('');
-    return `<section class="effort"><h2>Onde o tempo vai</h2>
-      <p class="muted">A barra mostra o tempo que o plano de ${S.hours}h dá a cada área, entre os blocos que têm uma área definida. O traço escuro marca o peso que o diagnóstico recomendou (RLM 35%, Inglês 25%, Analítico 22%, Português 18%).</p>
-      ${rows}</section>`;
-  }
-  function viewPlano() {
-    const cur = currentDay();
-    const totalMin = days.reduce((a, d) => a + blocksOf(d).reduce((x, b) => x + b.min, 0), 0);
-    const rows = days.map(d => {
-      const tl = timeline(d), st = dayStats(d);
-      const areas = [...new Set(tl.flatMap(b => b.areas))];
-      const isT = cur.today && cur.n === d.n;
-      return `<li><a class="plan-day${isT ? ' today' : ''}" href="#/dia/${d.n}">
-        <div class="pd-date"><strong>${d.wd} ${fmtDM(d.date)}</strong><span>${isT ? 'hoje' : 'dia ' + d.n}</span></div>
-        <div><p class="pd-title">${esc(dayTitle(d))}</p><div class="pd-chips">${(d.kind === 'sim' ? ['SIM'] : d.kind === 'normal' ? [d.focus.f1, d.focus.f2] : areas).map(a => a === 'SIM' ? '<span class="chip a-SIM">simulado</span>' : chipA(a)).join('')}</div></div>
-        <div class="pd-ruler">${rulerHTML(d, tl, { mini: true })}</div>
-        <div class="pd-pct">${st.pct}%<small>feito</small></div>
-      </a></li>`;
-    }).join('');
+  function viewModulos(arg) {
+    if (AREAS.includes(arg)) { S.filt.area = arg; save(); }
+    else if (arg && (MOD[arg] || /^SIM\d$/.test(arg))) { S.filt = { area: '', nivel: '', pend: false, hide: false }; save(); }
+    const F = S.filt;
+    const cur = nextItem();
+    const areaChips = `<div class="grp">${[['', 'Todas as áreas']].concat(AREAS.map(a => [a, AREA_SHORT[a]])).map(([a, l]) => `<button type="button" class="fchip ${a ? 'a-' + a : ''}" data-act="f-area" data-v="${a}" aria-pressed="${F.area === a}">${esc(l)}</button>`).join('')}</div>`;
+    const nivChips = `<div class="grp">${[['', 'Todos os níveis'], ['1', 'Nível 1'], ['2', 'Nível 2'], ['3', 'Nível 3']].map(([v, l]) => `<button type="button" class="fchip" data-act="f-nivel" data-v="${v}" aria-pressed="${String(F.nivel) === v}">${l}</button>`).join('')}</div>`;
+    let out = '', lastPhase = 0, count = 0;
+    let phaseH = {}, phaseN = {};
+    const visible = ITEMS.filter(it => {
+      const s = status(it);
+      if (it.kind === 'sim') return !F.area && !F.nivel && !(F.pend && s) && !(F.hide && s === 'skip');
+      const m = MOD[it.id];
+      if (F.area && m.area !== F.area) return false;
+      if (F.nivel && String(m.nivel) !== String(F.nivel)) return false;
+      if (F.pend && s) return false;
+      if (F.hide && s === 'skip') return false;
+      return true;
+    });
+    visible.forEach(it => { if (it.kind === 'mod') { phaseH[it.phase] = (phaseH[it.phase] || 0) + itemH(it); phaseN[it.phase] = (phaseN[it.phase] || 0) + 1; } });
+    visible.forEach(it => {
+      if (it.phase !== lastPhase) {
+        lastPhase = it.phase;
+        out += `</ul><div class="phase-head"><h2>${esc(PHASE_NAME[it.phase])}</h2><span>${phaseN[it.phase] || 0} módulos, ${fh(phaseH[it.phase] || 0)}</span></div><ul class="mrows">`;
+      }
+      out += modRowHTML(it, ++count, cur && cur.id);
+    });
+    const intro = F.area ? `<div class="area-intro"><strong>${esc(AREA_NAME[F.area])}</strong>: ${D.areas[F.area].n} módulos, cerca de ${fh(D.areas[F.area].h)}${F.area === 'EN' ? ' mais a leitura diária' : ''}. Fontes: ${esc(D.areas[F.area].fontes)}, mais o simulado oficial e os exemplos de questões do site do Teste ANPAD. Treino: <a href="#/prompts/${F.area}">prompt desta área</a>.</div>` : '';
     return `
-    <header class="page-head">
-      <h1>Plano de ${days.length} dias</h1>
-      <p>De ${fmtDM(days[0].date)} a ${fmtDM(days[days.length - 1].date)}, com ${Math.round(totalMin / 60)}h de relógio no total. Cada linha mostra o dia inteiro como uma régua: cada trecho é um bloco, na cor da área.</p>
-    </header>
-    <div class="plan-bar">
-      ${hoursToggle()}
-      <label>Início dos dias de estudo <input type="time" data-act="start-time" value="${S.start}"></label>
-    </div>
-    ${legendHTML(['RLM', 'EN', 'RA', 'PT'])}
-    <ol class="plan-days" style="margin-top:1.25rem">${rows}</ol>
-    ${effortHTML()}`;
+      <header class="page-head"><h1>Módulos</h1><p>Todo o conteúdo programático, na ordem sugerida. Abra um módulo para ver o trecho do edital, os termos para pesquisar e a meta. Os termos abrem uma busca no Google.</p></header>
+      <div class="filters">${areaChips}${nivChips}
+        <div class="grp"><button type="button" class="fchip" data-act="f-pend" aria-pressed="${F.pend}">Só pendentes</button><button type="button" class="fchip" data-act="f-hide" aria-pressed="${F.hide}">Esconder dominados</button></div>
+      </div>
+      ${intro}
+      ${out ? out.replace(/^<\/ul>/, '') + '</ul>' : '<div class="empty"><h3>Nenhum módulo com esses filtros</h3><button type="button" class="btn" data-act="f-clear">Limpar filtros</button></div>'}`;
   }
 
   /* ---------------------------------------------------------- view: prompts */
   function pParams(p) {
-    const base = { n: p.n || 10, modo: 'TREINO FOCADO', foco: '', dif: 'mista: 30% fácil, 50% média, 20% difícil', fracos: p.fracos || '' };
+    const base = { n: p.n || 10, modo: 'TREINO FOCADO', foco: '', dif: 'mista: 30% fácil, 50% média, 20% difícil', fracos: '' };
     return Object.assign(base, S.params[p.id] || {});
   }
   function buildPrompt(p) {
@@ -483,12 +495,12 @@
             <button type="button" data-act="param-modo" data-v="SIMULADO" aria-pressed="${v.modo === 'SIMULADO'}">Simulado</button>
           </div>
         </div>
-        <label class="field wide"><span>Foco do treino</span>
-          <input type="text" value="${esc(v.foco)}" data-param="foco" placeholder="Escolha uma sugestão ou escreva o seu" ${v.modo === 'SIMULADO' ? 'disabled' : ''}>
+        <label class="field wide"><span>Foco do treino (use o nome de um módulo)</span>
+          <input type="text" value="${esc(v.foco)}" data-param="foco" placeholder="Escolha um módulo abaixo ou escreva o seu" ${v.modo === 'SIMULADO' ? 'disabled' : ''}>
           <span class="chips">${p.focos.map(f => `<button type="button" data-act="param-foco" data-v="${esc(f)}">${esc(f)}</button>`).join('')}</span>
         </label>
         <label class="field"><span>Dificuldade</span><select data-param="dif">${difs.map(o => `<option${o === v.dif ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>
-        <label class="field wide"><span>Meus pontos fracos</span><textarea data-param="fracos" rows="3">${esc(v.fracos)}</textarea></label>
+        <label class="field wide"><span>Meus pontos fracos (opcional)</span><textarea data-param="fracos" rows="3" placeholder="Ex.: comando em negativo, vocabulário, lógica...">${esc(v.fracos)}</textarea></label>
       </div>`;
     }
     return `
@@ -503,9 +515,9 @@
           <h3>Como usar</h3>
           <ol>
             <li>Abra uma conversa nova para cada área e cole o prompt.</li>
-            <li>Na fase 1, resolva só as questões, no papel e com cronômetro.</li>
+            <li>Na fase 1, resolva só as questões, no papel e cronometrado.</li>
             <li>Na fase 2, envie suas respostas (<code>1-C, 2-A...</code>) ou escreva <code>GABARITO</code>.</li>
-            <li>Nos simulados (dias 5 e 9), use o modo Simulado na véspera e não abra o gabarito.</li>
+            <li>Nos simulados, use o modo Simulado, 10 questões por área, e não abra o gabarito antes.</li>
           </ol>
           <p class="small muted" style="margin-top:.7rem">Gabaritos gerados por IA podem errar, principalmente em RLM. Se a sua resolução divergir, refaça e questione.</p>
         </section>
@@ -526,7 +538,7 @@
     </div>`;
   }
 
-  /* ---------------------------------------------------------- view: caderno */
+  /* ---------------------------------------------------------- view: erros */
   const F = { area: '', tipo: '', pend: false };
   function revStatus(e, k) {
     const due = addDays(e.date, k);
@@ -538,12 +550,13 @@
       const st = revStatus(e, k);
       return `<button type="button" class="rev ${st}" data-act="err-rev" data-id="${e.id}" data-k="${k}" title="Revisão D+${k}, ${fmtDM(addDays(e.date, k))}" aria-pressed="${st === 'done'}">D+${k}<small>${fmtDM(addDays(e.date, k))}</small></button>`;
     }).join('');
+    const mod = e.modulo && MOD[e.modulo] ? `<a class="chip a-${MOD[e.modulo].area}" href="#/modulos/${e.modulo}">${esc(e.modulo)}</a>` : '';
     return `<li class="err a-${e.area}">
       <div class="err-meta"><span>${fmtDM(e.date)}</span>${chipA(e.area)}</div>
       <div class="err-body">
         <p class="why">${esc(e.porque)}</p>
         ${e.regra ? `<p class="rule">Regra: ${esc(e.regra)}</p>` : ''}
-        <div class="err-tags">${(e.tipos || []).map(t => `<span class="tg" title="${esc(TYPES[t])}">${t} ${esc(TYPES[t])}</span>`).join('')}<span class="muted small">${esc(e.origem || '')}</span>${e.reinc ? '<span class="chip" style="--c:var(--danger)">reincidente</span>' : ''}</div>
+        <div class="err-tags">${(e.tipos || []).map(t => `<span class="tg" title="${esc(TYPES[t])}">${t} ${esc(TYPES[t])}</span>`).join('')}${mod}<span class="muted small">${esc(e.origem || '')}</span>${e.reinc ? '<span class="chip" style="--c:var(--danger)">reincidente</span>' : ''}</div>
       </div>
       <div class="err-side">
         <div class="revs">${chips}</div>
@@ -561,23 +574,24 @@
     if (F.pend) list = list.filter(e => [1, 3, 7].some(k => revStatus(e, k) === 'due'));
     list.sort((a, b) => b.date.localeCompare(a.date));
     if (!S.errors.length) {
-      return `<div class="empty"><h3>Nenhum erro registrado ainda</h3><p class="muted">Comece importando os 20 erros do simulado de 28/10, já classificados. É a tarefa do bloco B0 do dia 1.</p><button type="button" class="btn primary" data-act="err-seed">Importar os 20 erros do simulado</button></div>`;
+      return `<div class="empty"><h3>Nenhum erro registrado ainda</h3><p class="muted" style="max-width:52ch">Cada erro vira uma linha: o que aconteceu, o tipo e a regra para não repetir. Registre acima o primeiro erro de um treino ou leia como classificar na seção Guia.</p><a class="btn" href="#/guia/registro">Como registrar erros</a></div>`;
     }
     if (!list.length) return `<div class="empty"><h3>Nenhum erro com esses filtros</h3><button type="button" class="btn" data-act="err-clear-filters">Limpar filtros</button></div>`;
     return `<ul class="errs">${list.map(errItemHTML).join('')}</ul>`;
   }
-  function viewCaderno(tab) {
-    const tabs = `<div class="tabs" role="group" aria-label="Caderno"><a href="#/caderno/erros" ${tab === 'erros' ? 'aria-current="true"' : ''}>Erros</a><a href="#/caderno/placar" ${tab === 'placar' ? 'aria-current="true"' : ''}>Placar dos simulados</a></div>`;
+  function viewErros(tab) {
+    const tabs = `<div class="tabs" role="group" aria-label="Erros"><a href="#/erros/registro" ${tab === 'registro' ? 'aria-current="true"' : ''}>Registro de erros</a><a href="#/erros/placar" ${tab === 'placar' ? 'aria-current="true"' : ''}>Placar e diagnóstico</a></div>`;
     if (tab === 'placar') return `
-      <header class="page-head"><h1>Placar dos simulados</h1><p>Registre os acertos de cada simulado. O gráfico compara com o diagnóstico de 28/10 e com a meta de cada etapa.</p></header>
+      <header class="page-head"><h1>Placar e diagnóstico</h1><p>Anote os acertos do simulado diagnóstico e de cada simulado seguinte. O gráfico compara os resultados e mostra a referência de 60%.</p></header>
       ${tabs}<div style="margin-top:1.5rem">${placarHTML()}</div>`;
     const due = S.errors.reduce((a, e) => a + [1, 3, 7].filter(k => revStatus(e, k) === 'due').length, 0);
     const reinc = S.errors.filter(e => e.reinc).length;
     const byType = Object.keys(TYPES).map(t => [t, S.errors.filter(e => (e.tipos || []).includes(t)).length]);
     const maxT = Math.max(1, ...byType.map(x => x[1]));
-    const typesHTML = S.errors.length ? `<div class="types" aria-label="Erros por tipo">${byType.map(([t, c]) => `<div class="type-row a-NEU"><span>${t} ${esc(TYPES[t])}</span><div class="eff-track"><i style="width:${c / maxT * 100}%;background:var(--ink-2)"></i></div><span>${c}</span></div>`).join('')}</div>` : '';
+    const typesHTML = S.errors.length ? `<div class="types" aria-label="Erros por tipo">${byType.map(([t, c]) => `<div class="type-row"><span>${t} ${esc(TYPES[t])}</span><div class="eff-track"><i style="width:${c / maxT * 100}%"></i></div><span>${c}</span></div>`).join('')}</div>` : '';
+    const modOpts = AREAS.map(a => `<optgroup label="${esc(AREA_NAME[a])}">${Object.values(MOD).filter(m => m.area === a).map(m => `<option value="${m.id}">${esc(m.id)} · ${esc(m.nome)}</option>`).join('')}</optgroup>`).join('');
     return `
-      <header class="page-head"><h1>Caderno de erros</h1><p>Cada erro vira uma linha: tipo e regra. Revise em D+1, D+3 e D+7. O erro que volta duas vezes entra na lista de reincidentes.</p></header>
+      <header class="page-head"><h1>Registro de erros</h1><p>Cada erro vira uma linha: tipo e regra. Revise em D+1, D+3 e D+7. O erro que volta duas vezes é reincidente. <a href="#/guia/registro">Como classificar os erros</a>.</p></header>
       ${tabs}
       <div class="stats">
         <div class="stat-box"><b>${S.errors.length}</b><span>erros registrados</span></div>
@@ -591,24 +605,24 @@
         <div class="acc-body">
           <form id="err-form" class="form-grid">
             <label class="field c3"><span>Data</span><input type="date" name="date" value="${todayISO()}" required></label>
-            <label class="field c3"><span>Área</span><select name="area" required><option value="RLM">RLM</option><option value="EN">Inglês</option><option value="RA">Raciocínio Analítico</option><option value="PT">Português</option></select></label>
+            <label class="field c3"><span>Área</span><select name="area" required>${AREAS.map(a => `<option value="${a}">${esc(AREA_SHORT[a])}</option>`).join('')}</select></label>
             <label class="field c6"><span>Origem</span><input type="text" name="origem" placeholder="Simulado 1, Q7, ou o nome do livro"></label>
-            <div class="field c12"><span>Tipo de erro</span><div class="tipos">${Object.entries(TYPES).map(([k, v]) => `<label><input type="checkbox" name="tipo" value="${k}"><span>${k} ${esc(v)}</span></label>`).join('')}</div></div>
+            <label class="field c12"><span>Módulo relacionado (opcional)</span><select name="modulo"><option value="">Nenhum</option>${modOpts}</select></label>
+            <div class="field c12"><span>Tipo de erro</span><div class="tipos">${D.tipos.map(t => `<label><input type="checkbox" name="tipo" value="${t[0]}"><span>${t[0]} ${esc(t[1])}</span></label>`).join('')}</div></div>
             <label class="field c12"><span>Por que errei (uma frase)</span><input type="text" name="porque" required placeholder="Ex.: li o comando INADMISSÍVEL como se fosse admissível"></label>
             <label class="field c12"><span>Regra para não repetir</span><input type="text" name="regra" placeholder="Ex.: marque NEG ou POS no comando antes de ler o texto"></label>
             <div class="c12 row" style="margin-top:.75rem"><button type="submit" class="btn primary">Salvar erro</button></div>
           </form>
         </div>
       </details>
-      <div class="filters">
-        <select data-act="f-area" aria-label="Filtrar por área"><option value="">Todas as áreas</option>${['RLM', 'EN', 'RA', 'PT'].map(a => `<option value="${a}"${F.area === a ? ' selected' : ''}>${AREA_SHORT[a]}</option>`).join('')}</select>
-        <select data-act="f-tipo" aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${F.tipo === k ? ' selected' : ''}>${k} ${esc(v)}</option>`).join('')}</select>
-        <label class="row" style="gap:.4rem"><input type="checkbox" data-act="f-pend" ${F.pend ? 'checked' : ''}> Só com revisão vencida</label>
+      <div class="filters-e">
+        <select data-act="f-earea" aria-label="Filtrar por área"><option value="">Todas as áreas</option>${AREAS.map(a => `<option value="${a}"${F.area === a ? ' selected' : ''}>${esc(AREA_SHORT[a])}</option>`).join('')}</select>
+        <select data-act="f-etipo" aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>${D.tipos.map(t => `<option value="${t[0]}"${F.tipo === t[0] ? ' selected' : ''}>${t[0]} ${esc(t[1])}</option>`).join('')}</select>
+        <label class="row" style="gap:.4rem"><input type="checkbox" data-act="f-epend" ${F.pend ? 'checked' : ''}> Só com revisão vencida</label>
         <span style="flex:1"></span>
         <button type="button" class="btn sm" data-act="err-copy-md">Copiar como tabela Markdown</button>
         <button type="button" class="btn sm" data-act="err-export">Baixar JSON</button>
         <label class="btn sm" for="err-import">Importar JSON</label><input id="err-import" type="file" accept="application/json" hidden>
-        ${S.errors.length ? '' : '<button type="button" class="btn sm" data-act="err-seed">Importar os 20 erros do simulado</button>'}
       </div>
       <div id="err-list">${errList()}</div>`;
   }
@@ -618,7 +632,7 @@
   function radarSVG(series) {
     const cx = 180, cy = 165, R = 105;
     const pt = (a, v) => { const r = R * v / 100, t = a * Math.PI / 180; return [cx + r * Math.cos(t), cy + r * Math.sin(t)]; };
-    const pts = (vals) => AX.map(([k, a]) => pt(a, Math.max(0, Math.min(100, vals[k] ?? 0))).map(n => n.toFixed(1)).join(',')).join(' ');
+    const pts = vals => AX.map(([k, a]) => pt(a, Math.max(0, Math.min(100, vals[k] ?? 0))).map(n => n.toFixed(1)).join(',')).join(' ');
     const rings = [25, 50, 75, 100].map(v => `<polygon class="ring" points="${pts({ PT: v, EN: v, RA: v, RLM: v })}"/>`).join('');
     const axes = AX.map(([k, a]) => { const [x, y] = pt(a, 100); return `<line class="axis" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
     const anchors = { PT: ['middle', -10], EN: ['start', 5], RA: ['middle', 20], RLM: ['end', 5] };
@@ -627,86 +641,71 @@
     const ser = series.map(s => `<polygon class="${s.cls}" points="${pts(s.vals)}"/>`).join('');
     return `<svg class="radar" viewBox="0 0 360 330" role="img" aria-label="Gráfico de radar com o desempenho por área">${rings}${axes}${ser}${labels}</svg>`;
   }
-  function scorePct(s) { const o = {}; ['PT', 'EN', 'RA', 'RLM'].forEach(a => { const v = S.scores[s][a]; if (v !== undefined && v !== '' && v !== null) o[a] = Math.min(100, Math.max(0, +v / 10 * 100)); }); return o; }
+  const filled = (v, a) => v[a] !== undefined && v[a] !== '' && v[a] !== null;
   function placarHTML() {
-    const A = ['PT', 'EN', 'RA', 'RLM'];
-    const bl = D.baseline;
-    const row = (key, label) => `<tr><td>${label}</td>${A.map(a => `<td><input type="number" min="0" max="10" step="1" inputmode="numeric" data-score="${key}" data-a="${a}" value="${S.scores[key][a] ?? ''}" aria-label="${label}, ${AREA_SHORT[a]}, acertos de 10"></td>`).join('')}<td class="tot" id="tot-${key}"></td></tr>`;
+    const rows = S.scores.map(r => `<tr data-sid="${r.id}">
+      <td><input type="text" class="name" data-sname="${r.id}" value="${esc(r.nome)}" aria-label="Nome do simulado"></td>
+      ${AREAS.slice().sort((a, b) => ['PT', 'EN', 'RA', 'RLM'].indexOf(a) - ['PT', 'EN', 'RA', 'RLM'].indexOf(b)).map(a => `<td><input type="number" min="0" max="10" step="1" inputmode="numeric" data-score="${r.id}" data-a="${a}" value="${r.v[a] ?? ''}" aria-label="${esc(r.nome)}, ${AREA_SHORT[a]}, acertos de 10"></td>`).join('')}
+      <td class="tot" id="tot-${r.id}"></td>
+      <td><button type="button" class="btn sm ghost" data-act="score-del" data-id="${r.id}" aria-label="Remover linha">×</button></td></tr>`).join('');
     return `
       <div class="score-wrap">
         <div>
           <div class="tw"><table class="score-table">
-            <thead><tr><th>Simulado</th>${A.map(a => `<th>${a}</th>`).join('')}<th>Total</th></tr></thead>
-            <tbody>
-              <tr><td>Diagnóstico (28/10)</td>${A.map(a => `<td>${bl[a][0]}/${bl[a][1]}</td>`).join('')}<td class="tot">19/39</td></tr>
-              ${row('s1', 'Simulado 1 (01/11)')}
-              ${row('s2', 'Simulado 2 (05/11)')}
-              <tr><td class="muted">Meta do Simulado 2</td>${A.map(a => `<td class="muted">${String(D.goals.s2[a]).replace('.', ',')}</td>`).join('')}<td class="muted">${String(A.reduce((x, a) => x + D.goals.s2[a], 0)).replace('.', ',')}</td></tr>
-            </tbody>
+            <thead><tr><th>Simulado</th><th>PT</th><th>EN</th><th>RA</th><th>RLM</th><th>Total</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
           </table></div>
-          <p class="small muted" style="margin-top:.6rem">Acertos de 10 questões por área. As metas são referência, não promessa.</p>
+          <div class="row" style="margin-top:.7rem"><button type="button" class="btn sm" data-act="score-add">Adicionar simulado</button></div>
+          <p class="small muted" style="margin-top:.6rem">Acertos de 10 questões por área (PT, EN, RA e RLM).</p>
           <ul class="hints" id="hints"></ul>
         </div>
         <div>
           <div id="radar"></div>
-          <div class="radar-legend"><span><i style="background:var(--ink)"></i>Diagnóstico</span><span><i style="background:var(--EN)"></i>Simulado 1</span><span><i style="background:var(--PT)"></i>Simulado 2</span><span><i style="background:var(--NEU)"></i>Meta do Simulado 2</span></div>
+          <div class="radar-legend" id="radar-legend"></div>
         </div>
-      </div>`;
+      </div>
+      <section class="panel" style="margin-top:2rem;max-width:760px">
+        <h2>Como ler o resultado</h2>
+        <ul class="prose" style="padding-left:1.2rem;display:grid;gap:.4rem">${D.leitura.map(l => `<li>${l}</li>`).join('')}</ul>
+      </section>`;
   }
   function updatePlacar() {
-    const A = ['PT', 'EN', 'RA', 'RLM'];
-    ['s1', 's2'].forEach(k => {
-      const vals = A.map(a => S.scores[k][a]).filter(v => v !== undefined && v !== '' && v !== null);
-      const el = $('#tot-' + k); if (el) el.textContent = vals.length ? `${vals.reduce((x, y) => x + +y, 0)}/${vals.length * 10}` : '';
+    S.scores.forEach(r => {
+      const vals = AREAS.filter(a => filled(r.v, a)).map(a => +r.v[a]);
+      const el = $('#tot-' + r.id); if (el) el.textContent = vals.length ? `${vals.reduce((x, y) => x + y, 0)}/${vals.length * 10}` : '';
     });
-    const bl = {}; A.forEach(a => { bl[a] = D.baseline[a][0] / D.baseline[a][1] * 100; });
-    const series = [{ cls: 's-goal', vals: Object.fromEntries(A.map(a => [a, D.goals.s2[a] * 10])) }, { cls: 's-base', vals: bl }];
-    const p1 = scorePct('s1'), p2 = scorePct('s2');
-    if (Object.keys(p1).length) series.push({ cls: 's-1', vals: p1 });
-    if (Object.keys(p2).length) series.push({ cls: 's-2', vals: p2 });
-    const r = $('#radar'); if (r) r.innerHTML = radarSVG(series);
+    const withData = S.scores.filter(r => AREAS.some(a => filled(r.v, a))).slice(-4);
+    const series = [{ cls: 'rd-ref', vals: { PT: 60, EN: 60, RA: 60, RLM: 60 } }];
+    withData.forEach((r, i) => series.push({ cls: 'rd-' + i, vals: Object.fromEntries(AREAS.map(a => [a, filled(r.v, a) ? +r.v[a] * 10 : 0])) }));
+    const rd = $('#radar'); if (rd) rd.innerHTML = radarSVG(series);
+    const lg = $('#radar-legend');
+    if (lg) lg.innerHTML = withData.map((r, i) => `<span><i style="background:${['var(--ink)', 'var(--EN)', 'var(--PT)', 'var(--RLM)'][i]}"></i>${esc(r.nome)}</span>`).join('') + '<span><i style="background:var(--NEU)"></i>Referência de 60%</span>';
     const h = $('#hints');
     if (h) {
-      const items = A.filter(a => S.scores.s1[a] !== undefined && S.scores.s1[a] !== '' && +S.scores.s1[a] < THRESH[a]).map(a => `<li>${esc(HINTS[a])}</li>`);
-      h.innerHTML = items.join('');
+      const last = withData[withData.length - 1];
+      h.innerHTML = last ? AREAS.filter(a => filled(last.v, a) && +last.v[a] < 6).map(a =>
+        `<li>${esc(AREA_SHORT[a])} abaixo de 60% em «${esc(last.nome)}»: volte aos módulos de nível 1 dessa área e refaça os erros. <a href="#/modulos/${a}">Ver módulos de ${esc(AREA_SHORT[a])}</a>.</li>`).join('') : '';
     }
   }
 
   /* ---------------------------------------------------------- view: guia */
-  function viewGuia(tab) {
-    const tabs = [['diagnostico', 'Diagnóstico'], ['dicas', 'Dicas'], ['colas', 'Colas'], ['logistica', 'Logística e ajustes']]
-      .map(([k, l]) => `<a href="#/guia/${k}" ${tab === k ? 'aria-current="true"' : ''}>${l}</a>`).join('');
-    let body = '';
-    let title = '', sub = '';
-    if (tab === 'dicas') {
-      title = 'Dicas reais de estudo';
-      sub = 'Só o que muda nota, com base no seu simulado e no que a pesquisa sobre aprendizagem mostra funcionar.';
-      body = accordion(D.tips, true);
-    } else if (tab === 'colas') {
-      title = 'Colas para reescrever de memória';
-      sub = 'Revise e reescreva sem olhar. Só ler não fixa.';
-      body = `<label class="field search"><span>Buscar nas colas</span><input type="search" id="colas-q" placeholder="Ex.: modus tollens, however, SAC"></label>
-        <div class="colas">${D.colas.map(c => `<section class="panel" data-text="${esc((c.title + ' ' + c.html.replace(/<[^>]+>/g, ' ')).toLowerCase())}"><h3>${esc(c.title)}</h3><div class="prose">${c.html}</div></section>`).join('')}</div>`;
-    } else if (tab === 'logistica') {
-      title = 'Logística e regras de ajuste';
-      sub = 'Confira tudo nos dias 6 e 7. O que depende do edital e do Manual do Participante está marcado.';
-      const done = D.logistica.filter((_, i) => S.logi[i]).length;
-      body = `<section class="panel" style="max-width:760px"><h2>Checklist da prova (${done} de ${D.logistica.length})</h2>
-        <ul class="checks">${D.logistica.map((h, i) => `<li class="${S.logi[i] ? 'done' : ''}"><label class="chk a-PT"><input type="checkbox" data-act="logi" data-i="${i}" ${S.logi[i] ? 'checked' : ''}><span></span></label><span>${h}</span></li>`).join('')}</ul>
-        <p class="notice logi-note">${D.logisticaNote}</p></section>
-        <div style="margin-top:2rem">${accordion(D.ajuste, true)}</div>`;
-    } else {
-      title = 'Diagnóstico do simulado de 28/10';
-      sub = 'A base de todo o plano: onde você perdeu pontos e por quê.';
-      const bars = ['RLM', 'EN', 'RA', 'PT'].map(a => {
-        const [c, t] = D.baseline[a]; const p = Math.round(c / t * 100);
-        return `<div class="gb a-${a}"><p>${esc(AREA_NAME[a])}</p><b>${c}<small>/${t}</small></b><div class="mini-bar"><i style="width:${p}%"></i></div><p style="margin-top:.4rem">${p}% de acerto. Usou ${D.usage[a]}% do tempo (${D.times[a]}).</p></div>`;
+  function viewGuia(slug) {
+    const notes = D.guia.concat([{ slug: 'prova', title: 'Prova e edital' }]);
+    const cur = notes.find(n => n.slug === slug) || notes[0];
+    const list = notes.map(n => `<li><a class="a-${n.slug === 'prova' ? 'SIM' : 'EN'}" href="#/guia/${n.slug}" aria-current="${n.slug === cur.slug}"><strong>${esc(n.title)}</strong><span>${n.slug === 'prova' ? 'Checklist do que confirmar' : 'Método de estudo'}</span></a></li>`).join('');
+    let body;
+    if (cur.slug === 'prova') {
+      const secs = D.prova.sections.map((s, si) => {
+        const done = s.items.filter((_, ii) => S.prova[`${si}:${ii}`]).length;
+        return `<section class="panel" style="max-width:760px;margin-top:1rem"><h2>${esc(s.title)} <span class="muted small" style="font-family:var(--font-body);font-weight:500">(${done} de ${s.items.length})</span></h2>
+          <ul class="checks">${s.items.map((h, ii) => { const on = !!S.prova[`${si}:${ii}`]; return `<li class="${on ? 'done' : ''}"><label class="chk a-PT"><input type="checkbox" data-act="prova" data-k="${si}:${ii}" ${on ? 'checked' : ''}><span></span></label><span>${h}</span></li>`; }).join('')}</ul></section>`;
       }).join('');
-      body = `<div class="guide-bars">${bars}</div>${accordion(D.diag.filter(x => x.title !== 'Placar'), true)}`;
+      body = `<div class="prose">${D.prova.intro}</div>${secs}`;
+    } else {
+      body = `<div class="prose">${cur.html}</div>${cur.slug === 'registro' ? '<div class="cta-row"><a class="btn primary" href="#/erros/registro">Abrir o registro de erros</a></div>' : ''}${cur.slug === 'estudar-modulo' ? '<div class="cta-row"><a class="btn primary" href="#/modulos">Ver os módulos</a></div>' : ''}`;
     }
-    return `<header class="page-head"><h1>${title}</h1><p>${sub}</p></header>
-      <div class="tabs" role="group" aria-label="Guia">${tabs}</div>
-      <div style="margin-top:1.5rem">${body}</div>`;
+    return `<header class="page-head"><h1>Guia</h1><p>Como estudar com método e o que confirmar sobre a prova.</p></header>
+      <div class="guide-layout"><ul class="plist">${list}</ul><div><h2 style="font-size:1.7rem;margin-bottom:1rem">${esc(cur.title)}</h2>${body}</div></div>`;
   }
 
   /* ---------------------------------------------------------- navegação */
@@ -717,35 +716,41 @@
     $('#nav-tab').innerHTML = NAV.map(link).join('');
   }
   function parseHash() {
-    const h = location.hash.replace(/^#\/?/, '') || 'hoje';
+    const h = location.hash.replace(/^#\/?/, '') || 'painel';
     const [name, arg] = h.split('/');
     return { name, arg };
   }
   function route(keepScroll) {
     const { name, arg } = parseHash();
-    let html = '', nav = name;
+    let html = '';
     switch (name) {
-      case 'hoje': html = viewDay(currentDay().n, true); break;
-      case 'dia': { const n = Math.min(days.length, Math.max(1, parseInt(arg, 10) || 1)); html = viewDay(n, false); nav = 'plano'; break; }
-      case 'plano': html = viewPlano(); break;
+      case 'painel': html = viewPainel(); break;
+      case 'modulos': html = viewModulos(arg); break;
       case 'prompts': html = viewPrompts(arg); break;
-      case 'caderno': html = viewCaderno(arg === 'placar' ? 'placar' : 'erros'); break;
-      case 'guia': html = viewGuia(['dicas', 'colas', 'logistica'].includes(arg) ? arg : 'diagnostico'); break;
-      default: location.hash = '#/hoje'; return;
+      case 'erros': html = viewErros(arg === 'placar' ? 'placar' : 'registro'); break;
+      case 'guia': html = viewGuia(arg); break;
+      default: location.hash = '#/painel'; return;
     }
     view.innerHTML = html;
-    $$('[data-r]').forEach(a => { if (a.dataset.r === nav) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-    const accent = { prompts: 'RA', caderno: 'RLM', guia: 'PT', hoje: 'EN', plano: 'EN' }[nav];
-    $$('.tabbar a').forEach(a => a.style.setProperty('--c', `var(--${accent})`));
+    $$('[data-r]').forEach(a => { if (a.dataset.r === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if (name === 'prompts' && curPrompt) updatePreview(curPrompt);
-    if (name === 'caderno' && arg === 'placar') updatePlacar();
-    updateNow();
+    if (name === 'erros' && arg === 'placar') updatePlacar();
+    if (name === 'painel') { updateCalc(); }
     syncChrome();
+    requestAnimationFrame(placeRulerExtras);
     if (!keepScroll) window.scrollTo(0, 0);
+    if (name === 'modulos' && arg && MOD[arg] || (name === 'modulos' && /^SIM\d$/.test(arg || ''))) {
+      const row = document.getElementById('m-' + arg);
+      if (row) {
+        const dt = $('details.more', row); if (dt) dt.open = true;
+        setTimeout(() => { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }, 60);
+      }
+    }
   }
   function rerender() { const y = window.scrollY; route(true); window.scrollTo(0, y); }
 
   function countdown() {
+    if (!S.exam) return { rail: 'Defina a data da prova em Ajustes (opcional).', top: '' };
     const ms = new Date(S.exam) - new Date();
     if (isNaN(ms)) return { rail: '', top: '' };
     if (ms <= -864e5) return { rail: 'A prova já aconteceu.', top: 'Prova realizada' };
@@ -759,22 +764,21 @@
   }
   const THEME_LABEL = { auto: 'Tema: auto', light: 'Tema: claro', dark: 'Tema: escuro' };
   function syncChrome() {
-    $$('[data-act="hours"]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.hours)));
     const c = countdown();
-    $('#count-rail').innerHTML = c.rail; $('#count-top').textContent = c.top;
-    const o = overall();
-    $('#meter-rail').style.width = o.pct + '%';
-    $('#meter-txt').textContent = `${o.pct}% do plano de ${S.hours}h concluído`;
+    $('#count-rail').innerHTML = c.rail; $('#count-top').textContent = c.top; $('#count-top').hidden = !c.top;
+    const st = stats();
+    $('#meter-rail').style.width = st.pct + '%';
+    $('#meter-txt').textContent = `${st.pct}% do plano concluído`;
     $('#theme-btn').textContent = THEME_LABEL[S.theme];
     document.documentElement.dataset.theme = S.theme;
   }
 
   /* ---------------------------------------------------------- eventos */
   function errToMd() {
-    const esc2 = s => String(s || '').replace(/\|/g, '\\|');
-    const head = '| Data | Área | Origem | Tipo | Por que errei | Regra para não repetir | D+1 | D+3 | D+7 |\n|---|---|---|---|---|---|---|---|---|';
+    const e2 = s => String(s || '').replace(/\|/g, '\\|');
+    const head = '| Data | Área | Módulo | Origem | Tipo | Por que errei | Regra para não repetir | D+1 | D+3 | D+7 |\n|---|---|---|---|---|---|---|---|---|---|';
     const rows = S.errors.slice().sort((a, b) => a.date.localeCompare(b.date)).map(e =>
-      `| ${fmtDM(e.date)} | ${e.area} | ${esc2(e.origem)} | ${(e.tipos || []).join('/')} | ${esc2(e.porque)} | ${esc2(e.regra)} | ${e.rev.d1 ? '[x]' : '[ ]'} | ${e.rev.d3 ? '[x]' : '[ ]'} | ${e.rev.d7 ? '[x]' : '[ ]'} |`);
+      `| ${fmtDM(e.date)} | ${e.area} | ${e.modulo || ''} | ${e2(e.origem)} | ${(e.tipos || []).join('/')} | ${e2(e.porque)} | ${e2(e.regra)} | ${e.rev.d1 ? '[x]' : '[ ]'} | ${e.rev.d3 ? '[x]' : '[ ]'} | ${e.rev.d7 ? '[x]' : '[ ]'} |`);
     return head + '\n' + rows.join('\n');
   }
   function download(name, text) {
@@ -787,59 +791,57 @@
     let added = 0;
     list.forEach(x => {
       if (!x || !x.area || !x.porque) return;
-      if (S.errors.some(e => e.area === x.area && e.origem === x.origem && e.porque === x.porque)) return;
-      S.errors.push({ id: uid(), date: x.date || todayISO(), area: x.area, origem: x.origem || '', tipos: x.tipos || [], porque: x.porque, regra: x.regra || '', rev: x.rev || { d1: false, d3: false, d7: false }, reinc: !!x.reinc });
+      if (S.errors.some(e => e.area === x.area && e.origem === x.origem && e.porque === x.porque && e.date === x.date)) return;
+      S.errors.push({ id: uid(), date: x.date || todayISO(), area: x.area, origem: x.origem || '', modulo: x.modulo || '', tipos: x.tipos || [], porque: x.porque, regra: x.regra || '', rev: x.rev || { d1: false, d3: false, d7: false }, reinc: !!x.reinc });
       added++;
     });
     save(); return added;
   }
+  const setParams = (id, o) => { S.params[id] = Object.assign({}, S.params[id] || {}, o); save(); };
 
   document.addEventListener('click', ev => {
     const el = ev.target.closest('[data-act]');
     if (!el) return;
-    const act = el.dataset.act;
-    const d = +el.dataset.d, i = +el.dataset.i;
+    const act = el.dataset.act, id = el.dataset.id;
     switch (act) {
-      case 'hours': S.hours = +el.dataset.v; save(); rerender(); break;
       case 'theme': S.theme = { auto: 'light', light: 'dark', dark: 'auto' }[S.theme]; save(); syncChrome(); break;
       case 'settings': openSettings(); break;
       case 'settings-close': $('#settings').close(); break;
-      case 'goto': {
-        const row = document.getElementById('blk-' + el.dataset.i);
-        if (row) {
-          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
-          const dt = $('details.more', row); if (dt && !dt.open) dt.open = true;
-        }
-        break;
-      }
-      case 'timer': { const day = days[d - 1]; const k = bkey(day, i); if (T && T.doneKey === k && T.state !== 'finished') { toast('Este bloco já está no timer.'); } else startTimer(d, i); break; }
+      case 'goto-mod': location.hash = '#/modulos/' + id; break;
+      case 'session': startSession(id); break;
       case 'timer-toggle': timerToggle(); break;
       case 'timer-reset': timerReset(); break;
       case 'timer-close': timerClose(); break;
-      case 'timer-done': timerFinishMark(); break;
-      case 'day-all': { const day = days[d - 1]; blocksOf(day).forEach((b, j) => { if (b.type !== 'break') S.done[bkey(day, j)] = true; }); save(); rerender(); break; }
-      case 'day-none': { const day = days[d - 1]; blocksOf(day).forEach((b, j) => { delete S.done[bkey(day, j)]; }); save(); rerender(); break; }
+      case 'timer-break': startBreak(10); break;
+      case 'mod-done': S.mod[id] = 'done'; save(); rerender(); toast('Marcado como feito.'); break;
+      case 'mod-skip': if (S.mod[id] === 'skip') delete S.mod[id]; else S.mod[id] = 'skip'; save(); rerender(); break;
+      case 'habit': { const t = todayISO(); const i = S.habit.indexOf(t); if (i >= 0) S.habit.splice(i, 1); else S.habit.push(t); save(); rerender(); break; }
+      case 'f-area': S.filt.area = el.dataset.v; save(); rerender(); break;
+      case 'f-nivel': S.filt.nivel = el.dataset.v; save(); rerender(); break;
+      case 'f-pend': S.filt.pend = !S.filt.pend; save(); rerender(); break;
+      case 'f-hide': S.filt.hide = !S.filt.hide; save(); rerender(); break;
+      case 'f-clear': S.filt = { area: '', nivel: '', pend: false, hide: false }; save(); rerender(); break;
       case 'open-prompt': {
-        const a = el.dataset.area; const p = D.prompts.find(x => x.id === a);
-        S.params[a] = Object.assign({}, S.params[a] || {}, { n: +el.dataset.n, foco: el.dataset.foco, modo: 'TREINO FOCADO' });
-        S.lastPrompt = a; save(); location.hash = '#/prompts/' + a;
-        toast('Parâmetros do bloco aplicados ao prompt.'); break;
+        const m = MOD[id]; const p = D.prompts.find(x => x.id === m.area);
+        setParams(m.area, { n: p.n, foco: m.nome, modo: 'TREINO FOCADO' });
+        S.lastPrompt = m.area; save(); location.hash = '#/prompts/' + m.area;
+        toast('Módulo aplicado ao campo FOCO do prompt.'); break;
       }
-      case 'param-modo': { const p = curPrompt; S.params[p.id] = Object.assign({}, S.params[p.id] || {}, { modo: el.dataset.v }); save(); rerender(); break; }
-      case 'param-foco': { const p = curPrompt; S.params[p.id] = Object.assign({}, S.params[p.id] || {}, { foco: el.dataset.v, modo: 'TREINO FOCADO' }); save(); rerender(); break; }
+      case 'param-modo': setParams(curPrompt.id, { modo: el.dataset.v }); rerender(); break;
+      case 'param-foco': setParams(curPrompt.id, { foco: el.dataset.v, modo: 'TREINO FOCADO' }); rerender(); break;
       case 'copy-prompt': copyText(buildPrompt(curPrompt), 'Prompt copiado. Cole em uma conversa nova.'); break;
       case 'copy-snippet': copyText(el.dataset.text, 'Copiado.'); break;
       case 'copy-answers': { const n = curPrompt ? pParams(curPrompt).n : 10; copyText(Array.from({ length: n }, (_, k) => `${k + 1}-?`).join(', '), 'Modelo de resposta copiado.'); break; }
-      case 'err-seed': { const a = mergeErrors(D.errorsSeed.map(e => Object.assign({ date: '2026-10-28' }, e))); toast(a ? `${a} erros importados.` : 'Esses erros já estão no caderno.'); rerender(); break; }
-      case 'err-del': if (confirm('Apagar este erro?')) { S.errors = S.errors.filter(e => e.id !== el.dataset.id); save(); rerender(); } break;
-      case 'err-reinc': { const e = S.errors.find(x => x.id === el.dataset.id); if (e) { e.reinc = !e.reinc; save(); rerender(); } break; }
-      case 'err-rev': { const e = S.errors.find(x => x.id === el.dataset.id); if (e) { e.rev['d' + el.dataset.k] = !e.rev['d' + el.dataset.k]; save(); rerender(); } break; }
+      case 'err-del': if (confirm('Apagar este erro?')) { S.errors = S.errors.filter(e => e.id !== id); save(); rerender(); } break;
+      case 'err-reinc': { const e = S.errors.find(x => x.id === id); if (e) { e.reinc = !e.reinc; save(); rerender(); } break; }
+      case 'err-rev': { const e = S.errors.find(x => x.id === id); if (e) { e.rev['d' + el.dataset.k] = !e.rev['d' + el.dataset.k]; save(); rerender(); } break; }
       case 'err-clear-filters': F.area = ''; F.tipo = ''; F.pend = false; rerender(); break;
-      case 'err-copy-md': copyText(errToMd(), 'Tabela copiada. Cole no Obsidian.'); break;
-      case 'err-export': download('caderno-de-erros.json', JSON.stringify(S.errors, null, 2)); break;
-      case 'backup-export': download('rumo-ao-anpad-backup.json', JSON.stringify({ app: 'anpad26', state: S }, null, 2)); break;
-      case 'reset-progress': if (confirm('Zerar blocos feitos, entregáveis e checklist? Erros, notas e placar são mantidos.')) { S.done = {}; S.dchk = {}; S.logi = {}; save(); $('#settings').close(); rerender(); toast('Progresso zerado.'); } break;
+      case 'err-copy-md': copyText(errToMd(), 'Tabela copiada. Cole no Obsidian ou em um documento.'); break;
+      case 'err-export': download('registro-de-erros.json', JSON.stringify(S.errors, null, 2)); break;
+      case 'score-add': S.scores.push({ id: uid(), nome: `Simulado ${S.scores.length}`, v: {} }); save(); rerender(); break;
+      case 'score-del': if (confirm('Remover esta linha do placar?')) { S.scores = S.scores.filter(r => r.id !== id); save(); rerender(); } break;
+      case 'backup-export': download('rumo-ao-anpad-backup.json', JSON.stringify({ app: 'anpad-v2', state: S }, null, 2)); break;
+      case 'reset-progress': if (confirm('Zerar módulos feitos, "já domino", tempo registrado, leitura diária e checklists? Erros e placar são mantidos.')) { S.mod = {}; S.time = {}; S.habit = []; S.prova = {}; save(); $('#settings').close(); rerender(); toast('Progresso zerado.'); } break;
       case 'reset-all': if (confirm('Apagar todos os dados deste app neste navegador?')) { S = clone(DEF); T = null; saveT_(); saveNow(); $('#settings').close(); renderDock(); rerender(); toast('Dados apagados.'); } break;
       default: break;
     }
@@ -848,24 +850,15 @@
   document.addEventListener('change', ev => {
     const el = ev.target;
     const act = el.dataset && el.dataset.act;
-    if (act === 'toggle') {
-      const day = days[+el.dataset.d - 1], k = bkey(day, +el.dataset.i);
-      if (el.checked) S.done[k] = true; else delete S.done[k];
+    if (act === 'mod-toggle') {
+      if (el.checked) S.mod[el.dataset.id] = 'done'; else delete S.mod[el.dataset.id];
       save(); rerender();
-    } else if (act === 'dchk') {
-      const k = `${el.dataset.d}:${el.dataset.j}`;
-      if (el.checked) S.dchk[k] = true; else delete S.dchk[k];
+    } else if (act === 'prova') {
+      if (el.checked) S.prova[el.dataset.k] = true; else delete S.prova[el.dataset.k];
       save(); rerender();
-    } else if (act === 'logi') {
-      if (el.checked) S.logi[el.dataset.i] = true; else delete S.logi[el.dataset.i];
-      save(); rerender();
-    } else if (act === 'day-select') {
-      location.hash = '#/dia/' + el.value;
-    } else if (act === 'start-time') {
-      if (el.value) { S.start = el.value; save(); rerender(); }
-    } else if (act === 'f-area') { F.area = el.value; $('#err-list').innerHTML = errList(); }
-    else if (act === 'f-tipo') { F.tipo = el.value; $('#err-list').innerHTML = errList(); }
-    else if (act === 'f-pend') { F.pend = el.checked; $('#err-list').innerHTML = errList(); }
+    } else if (act === 'f-earea') { F.area = el.value; $('#err-list').innerHTML = errList(); }
+    else if (act === 'f-etipo') { F.tipo = el.value; $('#err-list').innerHTML = errList(); }
+    else if (act === 'f-epend') { F.pend = el.checked; $('#err-list').innerHTML = errList(); }
     else if (el.id === 'err-import' || el.id === 'backup-file') {
       const f = el.files[0]; if (!f) return;
       const r = new FileReader();
@@ -886,16 +879,19 @@
 
   document.addEventListener('input', ev => {
     const el = ev.target;
-    if (el.dataset.note) { S.notes[el.dataset.note] = el.value; save(); }
-    else if (el.dataset.param && curPrompt) {
-      S.params[curPrompt.id] = Object.assign({}, S.params[curPrompt.id] || {}, { [el.dataset.param]: el.dataset.param === 'n' ? Math.max(1, Math.min(40, +el.value || 1)) : el.value });
-      save(); updatePreview(curPrompt);
+    if (el.dataset.param && curPrompt) {
+      setParams(curPrompt.id, { [el.dataset.param]: el.dataset.param === 'n' ? Math.max(1, Math.min(40, +el.value || 1)) : el.value });
+      updatePreview(curPrompt);
+    } else if (el.dataset.calc) {
+      if (el.dataset.calc === 'days') S.days = el.value === '' ? null : Math.max(1, +el.value);
+      else S.hpd = Math.max(0.5, +el.value || 0.5);
+      save(); updateCalc();
     } else if (el.dataset.score) {
-      S.scores[el.dataset.score][el.dataset.a] = el.value === '' ? '' : Math.max(0, Math.min(10, Math.round(+el.value)));
-      save(); updatePlacar();
-    } else if (el.id === 'colas-q') {
-      const q = el.value.trim().toLowerCase();
-      $$('.colas .panel').forEach(p => { p.hidden = q && !p.dataset.text.includes(q); });
+      const row = S.scores.find(r => r.id === el.dataset.score);
+      if (row) { row.v[el.dataset.a] = el.value === '' ? '' : Math.max(0, Math.min(10, Math.round(+el.value))); save(); updatePlacar(); }
+    } else if (el.dataset.sname) {
+      const row = S.scores.find(r => r.id === el.dataset.sname);
+      if (row) { row.nome = el.value; save(); updatePlacar(); }
     }
   });
 
@@ -909,34 +905,34 @@
       ev.preventDefault();
       const f = new FormData(ev.target);
       const e = {
-        id: uid(), date: f.get('date') || todayISO(), area: f.get('area'), origem: (f.get('origem') || '').trim(),
+        id: uid(), date: f.get('date') || todayISO(), area: f.get('area'), origem: (f.get('origem') || '').trim(), modulo: f.get('modulo') || '',
         tipos: f.getAll('tipo'), porque: (f.get('porque') || '').trim(), regra: (f.get('regra') || '').trim(),
         rev: { d1: false, d3: false, d7: false }, reinc: false
       };
       if (!e.porque) return;
-      S.errors.push(e); save(); toast('Erro salvo no caderno.'); rerender();
+      S.errors.push(e); save(); toast('Erro salvo no registro.'); rerender();
     }
   });
 
   /* ajustes */
-  function toLocalInput(iso) { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  function toLocalInput(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
   function openSettings() {
-    $('#set-start').value = S.start; $('#set-exam').value = toLocalInput(S.exam); $('#set-theme').value = S.theme;
+    $('#set-exam').value = toLocalInput(S.exam); $('#set-sess').value = String(S.sess); $('#set-theme').value = S.theme;
     $('#settings').showModal();
   }
   $('#settings-form').addEventListener('submit', () => {
-    S.start = $('#set-start').value || S.start;
-    const ex = $('#set-exam').value; if (ex) S.exam = new Date(ex).toISOString();
-    S.theme = $('#set-theme').value; save(); rerender();
+    const ex = $('#set-exam').value; S.exam = ex ? new Date(ex).toISOString() : '';
+    S.sess = +$('#set-sess').value || 50; S.theme = $('#set-theme').value; save(); rerender();
   });
 
   window.addEventListener('hashchange', () => route(false));
+  window.addEventListener('resize', () => placeRulerExtras());
 
   /* ---------------------------------------------------------- início */
   buildNav();
   renderDock();
-  if (!location.hash) history.replaceState(null, '', '#/hoje');
+  if (!location.hash) history.replaceState(null, '', '#/painel');
   route(false);
-  setInterval(() => { updateNow(); syncChrome(); }, 30000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { updateNow(); syncChrome(); tick(); } });
+  setInterval(syncChrome, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncChrome(); tick(); } });
 })();

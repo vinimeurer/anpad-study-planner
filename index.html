@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Rumo ao ANPAD · plano de estudos até 08/11</title>
-  <meta name="description" content="Rotina de estudos para o Teste ANPAD: plano de 4h ou 6h por dia, timer por bloco, prompts para gerar questões, caderno de erros e colas.">
+  <title>Rumo ao ANPAD · plano de estudos por módulos</title>
+  <meta name="description" content="Plano de estudos para o Teste ANPAD, por módulos, cobrindo todo o conteúdo programático: roteiros, timer, prompts para gerar questões, registro de erros e guia de método.">
   <meta name="theme-color" content="#F2F5FA" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0D1224" media="(prefers-color-scheme: dark)">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 
   <div class="app">
     <aside class="rail" aria-label="Menu principal">
-      <a class="brand" href="#/hoje">
+      <a class="brand" href="#/painel">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">Rumo ao ANPAD</span>
       </a>
@@ -27,11 +27,6 @@
         <p class="count" id="count-rail"></p>
         <div class="meter" aria-hidden="true"><i id="meter-rail"></i></div>
         <p class="meter-txt" id="meter-txt"></p>
-
-        <div class="tabs tabs-sm" role="group" aria-label="Carga diária">
-          <button type="button" data-act="hours" data-v="4">4h por dia</button>
-          <button type="button" data-act="hours" data-v="6">6h por dia</button>
-        </div>
         <div class="rail-tools">
           <button type="button" class="btn ghost" data-act="settings">Ajustes</button>
           <button type="button" class="btn ghost" data-act="theme" id="theme-btn" aria-label="Alternar tema">Tema</button>
@@ -40,7 +35,7 @@
     </aside>
 
     <header class="topbar">
-      <a class="brand" href="#/hoje">
+      <a class="brand" href="#/painel">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">Rumo ao ANPAD</span>
       </a>
@@ -64,15 +59,19 @@
       <p class="muted">Tudo fica salvo só neste navegador (localStorage). Nada é enviado para servidor.</p>
 
       <label class="field">
-        <span>Horário de início dos dias de estudo</span>
-        <input type="time" id="set-start" required>
-        <small>Simulados começam às 13:00 e a véspera às 09:00, como no plano.</small>
+        <span>Data e hora da prova (opcional)</span>
+        <input type="datetime-local" id="set-exam">
+        <small>Com a data definida, o app mostra a contagem regressiva e calcula os dias disponíveis. Deixe em branco se não souber. Confirme a data no site oficial do Teste ANPAD.</small>
       </label>
 
       <label class="field">
-        <span>Data e hora da prova</span>
-        <input type="datetime-local" id="set-exam" required>
-        <small>A divulgação que encontrei indicava domingo, 08/11/2026, às 13h (Brasília). Confira no seu comprovante.</small>
+        <span>Duração padrão de uma sessão de estudo</span>
+        <select id="set-sess">
+          <option value="25">25 minutos</option>
+          <option value="50">50 minutos</option>
+          <option value="60">60 minutos</option>
+          <option value="90">90 minutos</option>
+        </select>
       </label>
 
       <label class="field">
@@ -94,11 +93,12 @@
       </div>
 
       <div class="field">
-        <span>Zerar dados</span>
+        <span>Começar uma nova edição</span>
         <div class="row">
-          <button type="button" class="btn danger" data-act="reset-progress">Zerar só o progresso</button>
+          <button type="button" class="btn danger" data-act="reset-progress">Zerar progresso dos módulos</button>
           <button type="button" class="btn danger" data-act="reset-all">Apagar tudo</button>
         </div>
+        <small>Zerar o progresso mantém o registro de erros e o placar. Apagar tudo remove também esses dados.</small>
       </div>
 
       <div class="modal-actions">
